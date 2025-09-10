@@ -53,7 +53,7 @@ public class PaymentController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    // 需要 HttpServletRequest 以便拿到 path
+    // In a real system, rate limiting should be per user/tenant, not global.
     public ResponseEntity<?> createPayment(
             @RequestHeader("X-Client-Id") String clientId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
