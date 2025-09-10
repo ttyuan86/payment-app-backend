@@ -1,0 +1,40 @@
+# curl -X POST "http://localhost:8080/api/v1/payments"
+#  -H "Content-Type: application/json"
+#  -H "X-Api-Key: test_api_key_123"
+#  -H "X-Client-Id: tenant_demo"
+#  -H "Idempotency-Key: 5a1b2c3d-4e5f-6a7b-8c9d-000111222333"
+#  -d '{
+#    "firstName": "Tony",
+#    "lastName": "Yuan",
+#    "cardNumber": "4111111111111111",
+#    "expiryMonth": 12,
+#    "expiryYear": 2030,
+#    "cvv": "123",
+#    "amountMinor": 2599,
+#    "currency": "AUD",
+#    "invoiceIds": ["INV-1001"],
+#    "clientReferenceId": "order-001"
+#  }'
+POST http://localhost:8080/api/v1/payments
+X-Api-Key: test_api_key_123
+X-Client-Id: tenant_demo
+Idempotency-Key: 5a1b2c3d-4e5f-6a7b-8c9d-000111222333
+Content-Type: application/json
+
+{
+  "firstName": "Tony",
+  "lastName": "Yuan",
+  "cardNumber": "4111111111111111",
+  "expiryMonth": 12,
+  "expiryYear": 2030,
+  "cvv": "123",
+  "amountMinor": 2599,
+  "currency": "AUD",
+  "invoiceIds": [
+    "INV-1001"
+  ],
+  "clientReferenceId": "order-001"
+}
+
+###
+

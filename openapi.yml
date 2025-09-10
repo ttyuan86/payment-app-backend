@@ -1,0 +1,382 @@
+openapi: 3.0.3
+info:
+  title: Payment API
+  version: 1.0.0
+  description: |
+    Simple demo Payment API with idempotency, basic rate limiting, and API key auth.
+
+    ### Authentication
+    - Supply your API key in the `X-Api-Key` request header.
+
+    ### Idempotency
+    - Supply an idempotency key in the `Idempotency-Key` request header.
+    - Reusing the same `(X-Client-Id, Idempotency-Key)` pair returns the original result.
+    - If a request is still being processed you may receive **202 Accepted**.
+
+    ### Global Rate Limit
+    - **100 requests per minute** (global demo limit).
+    - Standard rate limit headers are returned:
+      - `RateLimit-Limit`: total quota for the current window (e.g., `100;w=60`)
+      - `RateLimit-Remaining`: remaining requests in the window
+      - `Retry-After`: seconds to wait (on 429)
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Payments
+    description: Create and manage payments
+
+paths:
+  /api/v1/payments:
+    post:
+      tags: [Payments]
+      summary: Create a payment
+      description: Creates a payment and returns the resulting payment resource.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XClientId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+            examples:
+              valid:
+                value:
+                  firstName: Tony
+                  lastName: Yuan
+                  cardNumber: "4111111111111111"
+                  expiryMonth: 12
+                  expiryYear: 2030
+                  cvv: "123"
+                  amountMinor: 2599
+                  currency: AUD
+                  invoiceIds: ["INV-1001"]
+                  clientReferenceId: order-001
+      responses:
+        '201':
+          description: Created
+          headers:
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+              examples:
+                created:
+                  value:
+                    paymentId: pay_1234567890ab
+                    status: SUCCEEDED
+                    amountMinor: 2599
+                    currency: AUD
+                    maskedCard: 411111******1111
+                    brand: VISA
+                    expiryMonth: 12
+                    expiryYear: 2030
+                    clientId: tenant_demo
+                    idempotencyKey: 5a1b2c3d-4e5f-6a7b-8c9d-000111222333
+        '202':
+          description: Accepted — request is being processed (idempotency pending)
+          headers:
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                pending:
+                  value:
+                    status: 202
+                    error: Accepted
+                    message: Processing, please retry later
+                    path: /api/v1/payments
+        '400':
+          description: Bad Request — validation error (headers or body)
+          headers:
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingHeader:
+                  value:
+                    status: 400
+                    error: Bad Request
+                    message: "Required request header 'X-Client-Id' for method parameter type String is not present"
+                    path: /api/v1/payments
+                invalidBody:
+                  value:
+                    status: 400
+                    error: Bad Request
+                    message: amountMinor must be positive
+                    path: /api/v1/payments
+        '401':
+          description: Unauthorized — missing or invalid API key
+          headers:
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noKey:
+                  value:
+                    status: 401
+                    error: Unauthorized
+                    message: Missing or invalid API key
+                    path: /api/v1/payments
+        '409':
+          description: Conflict — duplicate/paid invoice or duplicate idempotency processed
+          headers:
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                alreadyPaid:
+                  value:
+                    status: 409
+                    error: Conflict
+                    message: "Some invoices already paid (duplicate invoice): INV-1001,INV-1002"
+                    paidInvoiceIds: ["INV-1001", "INV-1002"]
+                    path: /api/v1/payments
+                alreadyProcessed:
+                  value:
+                    status: 409
+                    error: Conflict
+                    message: Idempotency key already processed
+                    path: /api/v1/payments
+        '429':
+          description: Too Many Requests — global demo limit is 100 requests/minute
+          headers:
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+            Retry-After:
+              $ref: '#/components/headers/Retry-After'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                limited:
+                  value:
+                    status: 429
+                    error: Too Many Requests
+                    message: Too many requests - please try again later.
+                    path: /api/v1/payments
+        '500':
+          description: Internal Server Error
+          headers:
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                serverError:
+                  value:
+                    status: 500
+                    error: Internal Server Error
+                    message: Payment creation failed
+                    path: /api/v1/payments
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: API key required in the `X-Api-Key` header.
+
+  parameters:
+    XClientId:
+      name: X-Client-Id
+      in: header
+      required: true
+      description: Tenant/client identifier.
+      schema:
+        type: string
+        minLength: 1
+      example: tenant_demo
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Ensures idempotency for retries (unique per tenant and request).
+      schema:
+        type: string
+        minLength: 1
+      example: 5a1b2c3d-4e5f-6a7b-8c9d-000111222333
+
+  headers:
+    RateLimit-Limit:
+      description: Total allowed requests in the current window (100 requests per 60 seconds).
+      schema:
+        type: string
+        example: "100;w=60"
+    RateLimit-Remaining:
+      description: Remaining requests in the current window.
+      schema:
+        type: integer
+        example: 42
+    Retry-After:
+      description: Seconds to wait before retrying (returned on 429).
+      schema:
+        type: integer
+        example: 30
+
+  schemas:
+    PaymentCreateRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - cardNumber
+        - expiryMonth
+        - expiryYear
+        - cvv
+        - amountMinor
+        - currency
+        - invoiceIds
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          example: Tony
+        lastName:
+          type: string
+          minLength: 1
+          example: Yuan
+        cardNumber:
+          type: string
+          pattern: '^[0-9]{12,19}$'
+          example: "4111111111111111"
+        expiryMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+          example: 12
+        expiryYear:
+          type: integer
+          minimum: 2024
+          example: 2030
+        cvv:
+          type: string
+          pattern: '^[0-9]{3,4}$'
+          example: "123"
+        amountMinor:
+          type: integer
+          minimum: 1
+          description: Amount in minor units (e.g., cents).
+          example: 2599
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: AUD
+        invoiceIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          example: ["INV-1001"]
+        clientReferenceId:
+          type: string
+          maxLength: 128
+          nullable: true
+          example: order-001
+
+    PaymentResponse:
+      type: object
+      required:
+        - paymentId
+        - status
+        - amountMinor
+        - currency
+        - maskedCard
+        - brand
+        - expiryMonth
+        - expiryYear
+        - clientId
+        - idempotencyKey
+      properties:
+        paymentId:
+          type: string
+          example: pay_1234567890ab
+        status:
+          type: string
+          example: SUCCEEDED
+        amountMinor:
+          type: integer
+          example: 2599
+        currency:
+          type: string
+          example: AUD
+        maskedCard:
+          type: string
+          example: 411111******1111
+        brand:
+          type: string
+          example: VISA
+        expiryMonth:
+          type: integer
+          example: 12
+        expiryYear:
+          type: integer
+          example: 2030
+        clientId:
+          type: string
+          example: tenant_demo
+        idempotencyKey:
+          type: string
+          example: 5a1b2c3d-4e5f-6a7b-8c9d-000111222333
+
+    ErrorResponse:
+      type: object
+      required: [status, error, message]
+      properties:
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: Bad Request
+        message:
+          type: string
+          example: amountMinor must be positive
+        paidInvoiceIds:
+          type: array
+          items:
+            type: string
+          description: Present for conflicts when some invoices were already paid.
+          example: ["INV-1001","INV-1002"]
+        path:
+          type: string
+          example: /api/v1/payments
