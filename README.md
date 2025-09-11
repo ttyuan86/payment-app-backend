@@ -3,7 +3,7 @@
 A **multi-tenant backend** for invoice-driven payments.
 
 - **Tech stack**: Spring Boot (Java 11), Spring Web, Spring Data JPA, H2/MySQL
-- **Security/Validation**: API Key (`X-API-Key`), client isolation via `X-CLIENT-ID`, AES-GCM encryption, Luhn check, CORS
+- **Security/Validation**: API Key (`X-API-Key`), Rate Limiting,client isolation via `X-CLIENT-ID`, AES-GCM encryption, Luhn check, CORS
 - **Reliability**: **Double guards duplication check** (in-memory + DB idempotency), database unique constraints
 - **Documentation**:  OpenAPI 3 (`openapi.yml` in repo root)
 
@@ -65,7 +65,10 @@ A **multi-tenant backend** for invoice-driven payments.
 - `500 Internal Server Error` → unexpected failure
 
 ---
-
+### 6. Rate Limiting
+Limit: 100 requests per minute per API key
+- Implemented via `RateLimiterService` (using **Bucket4j**)
+- Configured in `SecurityConfig` filter chain
 ## 🔌 HTTP API
 
 ### `POST /api/payments`
